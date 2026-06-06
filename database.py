@@ -1,37 +1,55 @@
-def save_trx(message, amount):
-    try:
-        trxid = message.text
-        user_id = message.from_user.id
+import sqlite3
 
-        cursor.execute("""
-        INSERT INTO deposits
-        (user_id, amount, trxid, status)
-        VALUES (?, ?, ?, ?)
-        """, (
-            user_id,
-            amount,
-            trxid,
-            "approved"
-        ))
+# SQLite connection
+conn = sqlite3.connect("shop.db", check_same_thread=False)
+cursor = conn.cursor()
 
-        cursor.execute("""
-        UPDATE users
-        SET balance = balance + ?
-        WHERE telegram_id = ?
-        """, (
-            amount,
-            user_id
-        ))
+# Users table
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS users (
+    telegram_id INTEGER PRIMARY KEY,
+    balance INTEGER DEFAULT 0
+)
+""")
 
-        conn.commit()
+# Products table
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS products (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT,
+    price INTEGER
+)
+""")
 
-        bot.send_message(
-            message.chat.id,
-            f"✅ Deposit Successful\n💰 {amount} TK Added To Your Balance"
-        )
+# Stock table
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS stock (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER,
+    item TEXT,
+    sold INTEGER DEFAULT 0
+)
+""")
 
-    except Exception as e:
-        bot.send_message(
-            message.chat.id,
-            f"Error: {e}"
-        )
+# Deposits table
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS deposits (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    amount INTEGER,
+    trxid TEXT,
+    status TEXT DEFAULT 'pending'
+)
+""")
+
+# Orders table
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    product_id INTEGER,
+    item TEXT
+)
+""")
+
+conn.commit()
