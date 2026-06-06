@@ -318,3 +318,177 @@ bot.infinity_polling(
     skip_pending=True,
     long_polling_timeout=60
 )
+@bot.message_handler(commands=['deposits'])
+def deposits(message):
+
+    if message.from_user.id not in ADMINS:
+        return
+
+    cursor.execute("""
+    SELECT id,user_id,amount,trxid
+    FROM deposits
+    WHERE status='pending'
+    """)
+
+    rows = cursor.fetchall()
+
+    if not rows:
+        bot.send_message(
+            message.chat.id,
+            "No Pending Deposits"
+        )
+        return
+
+    text = "Pending Deposits\n\n"
+
+    for d in rows:
+        text += (
+            f"ID: {d[0]}\n"
+            f"User: {d[1]}\n"
+            f"Amount: {d[2]}\n"
+            f"TRX: {d[3]}\n\n"
+        )
+
+    bot.send_message(
+        message.chat.id,
+        text
+    )
+    @bot.message_handler(commands=['approve'])
+def approve(message):
+
+    if message.from_user.id not in ADMINS:
+        return
+
+    try:
+
+        deposit_id = int(
+            message.text.split()[1]
+        )
+
+        cursor.execute("""
+        SELECT user_id,amount
+        FROM deposits
+        WHERE id=?
+        """, (deposit_id,))
+
+        row = cursor.fetchone()
+
+        if not row:
+            bot.send_message(
+                message.chat.id,
+                "Deposit Not Found"
+            )
+            return
+
+        user_id = row[0]
+        amount = row[1]
+
+        cursor.execute("""
+        UPDATE users
+        SET balance=balance+?
+        WHERE telegram_id=?
+        """, (
+            amount,
+            user_id
+        ))
+
+        cursor.execute("""
+        UPDATE deposits
+        SET status='approved'
+        WHERE id=?
+        """, (deposit_id,))
+
+        conn.commit()
+
+        bot.send_message(
+            message.chat.id,
+            "✅ Deposit Approved"
+        )
+
+        bot.send_message(
+            user_id,
+            f"✅ {amount} TK Added To Balance"
+        )
+
+    except:
+        bot.send_message(
+            message.chat.id,
+            "Usage: /approve deposit_id"
+        )
+        @bot.message_handler(commands=['add_stock'])
+def add_stock(message):
+
+    if message.from_user.id not in ADMINS:
+        return
+
+    bot.send_message(
+        message.chat.id,
+        "ProductID:Stock"
+    )
+
+    bot.register_next_step_handler(
+        message,
+        save_stock
+    )
+
+def save_stock(message):
+
+    try:
+
+        product_id, item = message.text.split(":", 1)
+
+        cursor.execute("""
+        INSERT INTO stock
+        (product_id,item)
+        VALUES(?,?)
+        """, (
+            int(product_id),
+            item
+        ))
+
+        conn.commit()
+
+        bot.send_message(
+            message.chat.id,
+            "✅ Stock Added"
+        )
+
+    except:
+        bot.send_message(
+            message.chat.id,
+            "Wrong Format"
+        )
+        @bot.message_handler(commands=['stock'])
+def stock(message):
+
+    if message.from_user.id not in ADMINS:
+        return
+
+    cursor.execute("""
+    SELECT products.name,
+           COUNT(stock.id)
+    FROM stock
+    JOIN products
+    ON stock.product_id=products.id
+    WHERE sold=0
+    GROUP BY products.name
+    """)
+
+    rows = cursor.fetchall()
+
+    if not rows:
+        bot.send_message(
+            message.chat.id,
+            "No Stock"
+        )
+        return
+
+    text = "Stock Status\n\n"
+
+    for r in rows:
+        text += f"{r[0]} : {r[1]}\n"
+
+    bot.send_message(
+        message.chat.id,
+        text
+    )
