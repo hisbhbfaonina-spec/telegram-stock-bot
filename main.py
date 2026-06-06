@@ -1,18 +1,20 @@
 import telebot
 import os
 
-# Railway Variable
+# Bot Token from Railway Environment Variable
 TOKEN = os.getenv("BOT_TOKEN")
-
 if not TOKEN:
     raise Exception("BOT_TOKEN not found!")
 
 bot = telebot.TeleBot(TOKEN)
 
-# Admin ID
-admins = [7562995992]  # তোমার Telegram ID
+# Remove webhook if exists (fix 409 error)
+bot.remove_webhook()
 
-# Initial Stock
+# Admin IDs
+admins = [7562995992]  # Replace with your Telegram ID
+
+# Initial stock
 stock = [
     "gmail1@gmail.com:pass123",
     "gmail2@gmail.com:pass456",
@@ -21,7 +23,7 @@ stock = [
 
 # ---------------- COMMANDS ----------------
 
-# /start
+# /start command
 @bot.message_handler(commands=['start'])
 def start(message):
     bot.reply_to(
@@ -29,29 +31,27 @@ def start(message):
         "🛒 Telegram Stock Bot Online ✅\n\n/buy - Buy Stock"
     )
 
-# /buy
+# /buy command
 @bot.message_handler(commands=['buy'])
 def buy(message):
     if len(stock) == 0:
         bot.send_message(message.chat.id, "❌ Out Of Stock")
         return
-
     bot.send_message(
         message.chat.id,
-        "📦 Stock Available\n\nReply YES to confirm purchase."
+        "📦 Stock Available\n💵 Price: 200 TK\nReply YES to confirm purchase."
     )
     bot.register_next_step_handler(message, confirm_buy)
 
+# Buy confirmation
 def confirm_buy(message):
     global stock
     if message.text.upper() != "YES":
         bot.send_message(message.chat.id, "❌ Purchase Cancelled")
         return
-
     if len(stock) == 0:
         bot.send_message(message.chat.id, "❌ Out Of Stock")
         return
-
     item = stock.pop(0)
     bot.send_message(
         message.chat.id,
@@ -75,7 +75,6 @@ def add_stock(message):
     if message.from_user.id not in admins:
         bot.send_message(message.chat.id, "❌ You are not admin")
         return
-
     bot.send_message(
         message.chat.id,
         "Send stock list.\nOne stock per line."
