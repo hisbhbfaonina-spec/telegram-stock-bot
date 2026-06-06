@@ -21,7 +21,7 @@ stock = [
 
 # ---------------- COMMANDS ----------------
 
-# /start command
+# /start
 @bot.message_handler(commands=['start'])
 def start(message):
     bot.reply_to(
@@ -29,7 +29,7 @@ def start(message):
         "🛒 Telegram Stock Bot Online ✅\n\n/buy - Buy Stock"
     )
 
-# /buy command
+# /buy
 @bot.message_handler(commands=['buy'])
 def buy(message):
     if len(stock) == 0:
@@ -42,7 +42,6 @@ def buy(message):
     )
     bot.register_next_step_handler(message, confirm_buy)
 
-# Confirm purchase
 def confirm_buy(message):
     global stock
     if message.text.upper() != "YES":
@@ -83,7 +82,6 @@ def add_stock(message):
     )
     bot.register_next_step_handler(message, save_stock)
 
-# Save new stock
 def save_stock(message):
     global stock
     new_stock = [line.strip() for line in message.text.split("\n") if line.strip()]
@@ -95,4 +93,4 @@ def save_stock(message):
 
 # ---------------- RUN BOT ----------------
 print("Bot Started...")
-bot.infinity_polling(skip_pending=True)
+bot.infinity_polling(skip_pending=True, long_polling_timeout=60)
