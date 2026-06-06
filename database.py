@@ -1,10 +1,9 @@
 import sqlite3
 
-# SQLite connection
 conn = sqlite3.connect("shop.db", check_same_thread=False)
 cursor = conn.cursor()
 
-# Users table
+# Users
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS users (
     telegram_id INTEGER PRIMARY KEY,
@@ -12,7 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
 )
 """)
 
-# Products table
+# Products
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS products (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -21,7 +20,7 @@ CREATE TABLE IF NOT EXISTS products (
 )
 """)
 
-# Stock table
+# Stock (API keys / voucher codes)
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS stock (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31,7 +30,7 @@ CREATE TABLE IF NOT EXISTS stock (
 )
 """)
 
-# Deposits table
+# Deposits
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS deposits (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -42,7 +41,7 @@ CREATE TABLE IF NOT EXISTS deposits (
 )
 """)
 
-# Orders table
+# Orders
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS orders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
