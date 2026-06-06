@@ -1,5 +1,7 @@
-import telebot
 import os
+import telebot
+
+from database import conn, cursor
 
 TOKEN = os.getenv("BOT_TOKEN")
 
@@ -8,149 +10,309 @@ if not TOKEN:
 
 bot = telebot.TeleBot(TOKEN)
 
-# Remove webhook (fix 409 error)
 bot.remove_webhook()
 
-admins = [7562995992]
+ADMINS = [7562995992]
 
-products = {
-    1: {
-        "name": "Netflix",
-        "price": 300,
-        "stock": []
-    },
-    2: {
-        "name": "Spotify",
-        "price": 150,
-        "stock": []
-    },
-    3: {
-        "name": "Canva Pro",
-        "price": 250,
-        "stock": []
-    }
-}
+# START
 
 @bot.message_handler(commands=['start'])
 def start(message):
-    bot.send_message(
-        message.chat.id,
-        "🛒 Shop Bot Online ✅\n\n/products - View Products"
+
+    cursor.execute(
+        "INSERT OR IGNORE INTO users(telegram_id) VALUES(?)",
+        (message.from_user.id,)
+    )
+    conn.commit()
+
+    markup = telebot.types.ReplyKeyboardMarkup(
+        resize_keyboard=True
     )
 
-@bot.message_handler(commands=['products'])
-def products_list(message):
-    text = "📦 Available Products\n\n"
+    markup.row("🛒 Shop", "💰 Balance")
+    markup.row("💳 Deposit", "📦 My Orders")
 
-    for pid, product in products.items():
-        text += f"{pid}. {product['name']} - {product['price']} TK\n"
-
-    bot.send_message(message.chat.id, text)
-
-@bot.message_handler(commands=['buy'])
-def buy(message):
     bot.send_message(
         message.chat.id,
-        "Send Product ID"
+        "Welcome To PremiumX Shop",
+        reply_markup=markup
     )
 
-    bot.register_next_step_handler(message, process_buy)
+# BALANCE
 
-def process_buy(message):
-    try:
-        product_id = int(message.text)
+@bot.message_handler(func=lambda m: m.text == "💰 Balance")
+def balance(message):
 
-        if product_id not in products:
-            bot.send_message(message.chat.id, "❌ Invalid Product ID")
-            return
+    cursor.execute(
+        "SELECT balance FROM users WHERE telegram_id=?",
+        (message.from_user.id,)
+    )
 
-        product = products[product_id]
+    row = cursor.fetchone()
 
+    if row:
         bot.send_message(
             message.chat.id,
-            f"📦 {product['name']}\n💰 Price: {product['price']} TK\n\nReply YES"
+            f"💰 Balance: {row[0]} TK"
         )
 
-        bot.register_next_step_handler(
-            message,
-            confirm_buy,
-            product_id
-        )
+# SHOP
 
-    except:
-        bot.send_message(message.chat.id, "❌ Invalid Input")
+@bot.message_handler(func=lambda m: m.text == "🛒 Shop")
+def shop(message):
 
-def confirm_buy(message, product_id):
-    if message.text.upper() != "YES":
-        bot.send_message(message.chat.id, "❌ Purchase Cancelled")
-        return
-
-    if len(products[product_id]["stock"]) == 0:
-        bot.send_message(message.chat.id, "❌ Out Of Stock")
-        return
-
-    item = products[product_id]["stock"].pop(0)
-
-    bot.send_message(
-        message.chat.id,
-        f"✅ Purchase Success\n\n{item}"
+    cursor.execute(
+        "SELECT id,name,price FROM products"
     )
 
-@bot.message_handler(commands=['add_stock'])
-def add_stock(message):
+    rows = cursor.fetchall()
 
-    if message.from_user.id not in admins:
-        bot.send_message(message.chat.id, "❌ You are not admin")
+    if not rows:
+        bot.send_message(
+            message.chat.id,
+            "No Products Available"
+        )
         return
+
+    text = "📦 Products\n\n"
+
+    for p in rows:
+        text += f"{p[0]}. {p[1]} - {p[2]} TK\n"
+
+    text += "\nSend Product ID"
 
     bot.send_message(
         message.chat.id,
-        "Send:\nProductID:Stock"
+        text
     )
 
     bot.register_next_step_handler(
         message,
-        save_stock
+        process_buy
     )
 
-def save_stock(message):
+def process_buy(message):
+
     try:
-        product_id, item = message.text.split(":", 1)
 
-        product_id = int(product_id)
+        product_id = int(message.text)
 
-        if product_id not in products:
-            bot.send_message(message.chat.id, "❌ Invalid Product ID")
+        cursor.execute(
+            "SELECT name,price FROM products WHERE id=?",
+            (product_id,)
+        )
+
+        product = cursor.fetchone()
+
+        if not product:
+            bot.send_message(
+                message.chat.id,
+                "Invalid Product"
+            )
             return
-
-        products[product_id]["stock"].append(item)
 
         bot.send_message(
             message.chat.id,
-            "✅ Stock Added"
+            "Send Quantity"
+        )
+
+        bot.register_next_step_handler(
+            message,
+            process_quantity,
+            product_id,
+            product[1]
         )
 
     except:
         bot.send_message(
             message.chat.id,
-            "❌ Format: ProductID:Stock"
+            "Invalid Input"
         )
 
-@bot.message_handler(commands=['check_stock'])
-def check_stock(message):
+def process_quantity(message, product_id, price):
 
-    if message.from_user.id not in admins:
-        bot.send_message(message.chat.id, "❌ You are not admin")
+    try:
+
+        qty = int(message.text)
+
+        total = qty * price
+
+        cursor.execute(
+            "SELECT balance FROM users WHERE telegram_id=?",
+            (message.from_user.id,)
+        )
+
+        balance = cursor.fetchone()[0]
+
+        if balance < total:
+
+            bot.send_message(
+                message.chat.id,
+                f"❌ Need {total} TK"
+            )
+
+            return
+
+        cursor.execute("""
+        SELECT id,item
+        FROM stock
+        WHERE product_id=? AND sold=0
+        LIMIT ?
+        """, (product_id, qty))
+
+        items = cursor.fetchall()
+
+        if len(items) < qty:
+
+            bot.send_message(
+                message.chat.id,
+                "❌ Out Of Stock"
+            )
+
+            return
+
+        delivered = []
+
+        for item in items:
+
+            cursor.execute(
+                "UPDATE stock SET sold=1 WHERE id=?",
+                (item[0],)
+            )
+
+            delivered.append(item[1])
+
+        cursor.execute(
+            "UPDATE users SET balance=balance-? WHERE telegram_id=?",
+            (total, message.from_user.id)
+        )
+
+        conn.commit()
+
+        bot.send_message(
+            message.chat.id,
+            "✅ Purchase Success\n\n" +
+            "\n".join(delivered)
+        )
+
+    except:
+        bot.send_message(
+            message.chat.id,
+            "Invalid Quantity"
+        )
+
+# DEPOSIT
+
+@bot.message_handler(func=lambda m: m.text == "💳 Deposit")
+def deposit(message):
+
+    bot.send_message(
+        message.chat.id,
+        "Send Amount"
+    )
+
+    bot.register_next_step_handler(
+        message,
+        deposit_amount
+    )
+
+def deposit_amount(message):
+
+    try:
+
+        amount = int(message.text)
+
+        bot.send_message(
+            message.chat.id,
+            f"""
+Send Payment Then Send TRXID
+
+bKash: 01XXXXXXXXX
+Nagad: 01XXXXXXXXX
+
+Amount: {amount}
+"""
+        )
+
+        bot.register_next_step_handler(
+            message,
+            save_trx,
+            amount
+        )
+
+    except:
+        bot.send_message(
+            message.chat.id,
+            "Invalid Amount"
+        )
+
+def save_trx(message, amount):
+
+    trxid = message.text
+
+    cursor.execute("""
+    INSERT INTO deposits
+    (user_id,amount,trxid)
+    VALUES(?,?,?)
+    """, (
+        message.from_user.id,
+        amount,
+        trxid
+    ))
+
+    conn.commit()
+
+    bot.send_message(
+        message.chat.id,
+        "✅ Deposit Submitted"
+    )
+
+# ADMIN COMMANDS
+
+@bot.message_handler(commands=['add_product'])
+def add_product(message):
+
+    if message.from_user.id not in ADMINS:
         return
 
-    text = "📦 Stock Status\n\n"
+    bot.send_message(
+        message.chat.id,
+        "Name:Price"
+    )
 
-    for pid, product in products.items():
-        text += f"{product['name']} = {len(product['stock'])}\n"
+    bot.register_next_step_handler(
+        message,
+        save_product
+    )
 
-    bot.send_message(message.chat.id, text)
+def save_product(message):
 
-print("Bot Started...")
+    try:
+
+        name, price = message.text.split(":")
+
+        cursor.execute("""
+        INSERT INTO products(name,price)
+        VALUES(?,?)
+        """, (
+            name,
+            int(price)
+        ))
+
+        conn.commit()
+
+        bot.send_message(
+            message.chat.id,
+            "✅ Product Added"
+        )
+
+    except:
+        bot.send_message(
+            message.chat.id,
+            "Wrong Format"
+        )
+
+print("Bot Started")
 
 bot.infinity_polling(
     skip_pending=True,
