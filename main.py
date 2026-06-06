@@ -10,15 +10,18 @@ if not TOKEN:
 bot = telebot.TeleBot(TOKEN)
 
 # Admin ID
-admins = [7562995992]
+admins = [7562995992]  # তোমার Telegram ID
 
-# Demo Stock
+# Initial Stock
 stock = [
     "gmail1@gmail.com:pass123",
     "gmail2@gmail.com:pass456",
     "gmail3@gmail.com:pass789"
 ]
 
+# ---------------- COMMANDS ----------------
+
+# /start command
 @bot.message_handler(commands=['start'])
 def start(message):
     bot.reply_to(
@@ -26,6 +29,7 @@ def start(message):
         "🛒 Telegram Stock Bot Online ✅\n\n/buy - Buy Stock"
     )
 
+# /buy command
 @bot.message_handler(commands=['buy'])
 def buy(message):
     if len(stock) == 0:
@@ -38,9 +42,9 @@ def buy(message):
     )
     bot.register_next_step_handler(message, confirm_buy)
 
+# Confirm purchase
 def confirm_buy(message):
     global stock
-
     if message.text.upper() != "YES":
         bot.send_message(message.chat.id, "❌ Purchase Cancelled")
         return
@@ -50,27 +54,25 @@ def confirm_buy(message):
         return
 
     item = stock.pop(0)
-
     bot.send_message(
         message.chat.id,
         f"✅ Purchase Success\n\n{item}"
     )
 
+# /check_stock (admin only)
 @bot.message_handler(commands=['check_stock'])
 def check_stock(message):
-
     if message.from_user.id not in admins:
         bot.send_message(message.chat.id, "❌ You are not admin")
         return
-
     bot.send_message(
         message.chat.id,
         f"📦 Stock Left: {len(stock)}"
     )
 
+# /add_stock (admin only)
 @bot.message_handler(commands=['add_stock'])
 def add_stock(message):
-
     if message.from_user.id not in admins:
         bot.send_message(message.chat.id, "❌ You are not admin")
         return
@@ -79,25 +81,18 @@ def add_stock(message):
         message.chat.id,
         "Send stock list.\nOne stock per line."
     )
-
     bot.register_next_step_handler(message, save_stock)
 
+# Save new stock
 def save_stock(message):
     global stock
-
-    new_stock = []
-
-    for line in message.text.split("\n"):
-        line = line.strip()
-
-        if line:
-            stock.append(line)
-            new_stock.append(line)
-
+    new_stock = [line.strip() for line in message.text.split("\n") if line.strip()]
+    stock.extend(new_stock)
     bot.send_message(
         message.chat.id,
         f"✅ Added {len(new_stock)} stock(s)"
     )
 
+# ---------------- RUN BOT ----------------
 print("Bot Started...")
 bot.infinity_polling(skip_pending=True)
